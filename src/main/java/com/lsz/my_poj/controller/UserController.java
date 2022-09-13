@@ -219,4 +219,45 @@ public class UserController {
         System.out.println(file);
         return R.success("头像上传成功");
     }
+
+    /**
+     * 更新用户信息
+     *
+     * @param
+     * @return
+     */
+    @PutMapping
+    public R<User> updateWithFlavor(@RequestBody User user) {
+        log.info(user.toString());
+        userService.updateById(user);
+        LambdaQueryWrapper<User> queryWrapper=new LambdaQueryWrapper<>();
+        queryWrapper.eq(User::getId,user.getId());
+        User one = userService.getOne(queryWrapper);
+        return R.success(one);
+    }
+
+    /**
+     * 根据id查询用户
+     * @param id
+     * @return
+     */
+    @GetMapping
+    public R<User> getBy(@RequestParam Long id) {
+        log.info(id.toString());
+        User user = userService.getById(id);
+        return R.success(user);
+    }
+
+    /**
+     * 更新用户
+     * @param user
+     * @return
+     */
+    @PostMapping("/update")
+    public R<User> update( @RequestBody User user) {
+        log.info(user.toString());
+        userService.updateById(user);
+        User byId = userService.getById(user.getId());
+        return R.success(byId);
+    }
 }
