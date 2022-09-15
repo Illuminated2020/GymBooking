@@ -62,4 +62,15 @@ public class SportsController {
         log.info(list.toString());
         return R.success(list);
     }
+
+    /**
+     *预约场馆时展示场馆信息
+     */
+    @GetMapping("/one")
+    public R<Sports> one(@RequestParam String id) {
+        log.info(id);
+        Sports sports = sportsService.getById(id);
+        log.info(sports.toString());
+        return R.success(sports);
+    }
 }
