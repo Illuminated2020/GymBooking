@@ -1,5 +1,6 @@
 package com.lsz.my_poj.controller;
 
+import cn.hutool.core.date.DateUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.lsz.my_poj.common.Echarts;
@@ -45,13 +46,18 @@ public class ECchartsController {
         return R.success(list);
     }
 
+    /**
+     * 场馆未来人流量曲线
+     * @param phone
+     * @return
+     */
     @GetMapping("/one")
-    public R<List<Echarts>> one(@RequestParam String phone) {
+    public R<List<Echarts>> one() {
         List<Echarts> list = new ArrayList<Echarts>();
-
         QueryWrapper<Book> queryWrapper=new QueryWrapper<>();
+        //分组查询
         queryWrapper.groupBy("date_day");
-        queryWrapper.eq("beizhu",phone);
+        queryWrapper.ge("date_day", DateUtil.date().toString("yyyy/MM/dd"));
         queryWrapper.select("date_day, count(*) as total_count");
         List<Book> books = bookMapper.selectList(queryWrapper);
         for (Book book : books) {
@@ -60,6 +66,7 @@ public class ECchartsController {
             list.add(new Echarts(dateDay, totalCount));
         }
         log.info(books.toString());
+
         return R.success(list);
     }
 }
