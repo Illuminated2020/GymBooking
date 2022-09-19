@@ -5,6 +5,7 @@ import lombok.Data;
 
 @Data
 public class CommentDto extends Comment {
+
     //昵称
     private String nickname;
     //头像

@@ -59,4 +59,10 @@ public class CommentController {
         log.info(list.toString());
         return R.success(listDto);
     }
+
+    @DeleteMapping
+    public R deleteComment(@RequestParam Long id){
+        commentService.removeById(id);
+        return R.success(null);
+    }
 }
