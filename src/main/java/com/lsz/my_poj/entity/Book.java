@@ -10,6 +10,8 @@ public class Book {
     //    @TableId(type = IdType.ASSIGN_ID)
     private Long id;
 
+    private Long userId;
+
     //学生姓名
     private String stuName;
 
@@ -26,7 +28,9 @@ public class Book {
     private String dateTime;
 
     //备注
-    private String beizhu;
+    private String phone;
 
     private Integer totalCount;
+    //状态
+    private Integer status;
 }

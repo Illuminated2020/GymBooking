@@ -5,8 +5,10 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lsz.my_poj.common.R;
 import com.lsz.my_poj.entity.Book;
+import com.lsz.my_poj.entity.Sports;
 import com.lsz.my_poj.mapper.BookMapper;
 import com.lsz.my_poj.service.BookService;
+import com.lsz.my_poj.service.SportsService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -26,9 +28,18 @@ public class BookController {
     @Autowired
     private BookMapper bookMapper;
 
+    @Autowired
+    private SportsService sportsService;
     @PostMapping
     public R<String> order(@RequestBody Book order) {
         log.info(order.toString());
+        String sportsName = order.getSportsName();
+        LambdaQueryWrapper<Sports> queryWrapper=new LambdaQueryWrapper<>();
+        queryWrapper.eq(Sports::getName,sportsName);
+        Sports one = sportsService.getOne(queryWrapper);
+        one.setCount(one.getCount()+1);
+        sportsService.updateById(one);
+        order.setStatus(0);
         bookService.save(order);
         return R.success("成功");
     }
@@ -72,5 +83,46 @@ public class BookController {
             res.add(books.get(i));
         }
         return R.success(res);
+    }
+
+    @GetMapping("/mybook")
+    public R<List<Book>> Mybook(@RequestParam Long id) {
+        LambdaQueryWrapper<Book> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(Book::getUserId,id);
+        queryWrapper.orderByDesc(Book::getDateDay);
+        List<Book> list = bookService.list(queryWrapper);
+        return R.success(list);
+    }
+
+    @GetMapping("/cancle")
+    public R cancle(@RequestParam Long id) {
+        log.info(id.toString());
+        LambdaQueryWrapper<Book> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(Book::getId,id);
+        Book book = bookService.getOne(queryWrapper);
+        book.setStatus(4);
+        bookService.updateById(book);
+        return R.success(null);
+    }
+
+    @DeleteMapping
+    public R<String> deletBooking(@RequestParam("ids")  List<Long> ids) {
+        log.info("ids:{}", ids);
+        for (Long id : ids) {
+            bookService.removeById(id);
+        }
+        return R.success("预约删除成功");
+    }
+
+    @PostMapping("/next")
+    public R<String> next(@RequestBody  Book book1) {
+        Long id = book1.getId();
+        log.info(id.toString());
+        LambdaQueryWrapper<Book> queryWrapper=new LambdaQueryWrapper<>();
+        queryWrapper.eq(Book::getId,id);
+        Book book = bookService.getOne(queryWrapper);
+        book.setStatus(book.getStatus()+1);
+        bookService.updateById(book);
+        return R.success("状态更新成功");
     }
 }
