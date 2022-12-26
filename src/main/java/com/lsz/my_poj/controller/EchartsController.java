@@ -22,7 +22,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/echarts")
 @CrossOrigin("*")
-public class ECchartsController {
+public class EchartsController {
     @Autowired
     private BookService bookService;
 
@@ -48,7 +48,7 @@ public class ECchartsController {
 
     /**
      * 场馆未来人流量曲线
-     * @param phone
+     * @param
      * @return
      */
     @GetMapping("/one")

@@ -9,9 +9,11 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lsz.my_poj.common.R;
 import com.lsz.my_poj.entity.User;
 import com.lsz.my_poj.service.UserService;
+import com.lsz.my_poj.util.CheckCodeUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.util.DigestUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -19,6 +21,7 @@ import org.springframework.web.multipart.MultipartFile;
 import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
 import java.io.InputStream;
 import java.net.URLEncoder;
 import java.time.LocalDateTime;
@@ -33,18 +36,25 @@ public class UserController {
     @Autowired
     private UserService userService;
 
+    @Autowired
+    private RedisTemplate redisTemplate;
+
     /*
      * 用户列表查询，分页查询
      * */
     @GetMapping("/page")
-    public R<Page> page(int page, int pageSize) {
+    public R<Page> page(int page, int pageSize, String role, String nickname) {
         log.info("查询用户列表");
-        log.info("page = {},pageSize = {}", page, pageSize);
+        log.info("page = {},pageSize = {},role={}", page, pageSize, role);
         //构造分页构造器
         Page pageInfo = new Page<>(page, pageSize);
 
         //构造条件构造器
         LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper();
+
+        //添加过滤条件
+        queryWrapper.like(StringUtils.isNotEmpty(role), User::getRole, role);
+        queryWrapper.like(StringUtils.isNotEmpty(nickname), User::getNickname, nickname);
 
         //添加排序条件
         queryWrapper.orderByDesc(User::getCreateTime);
@@ -56,39 +66,50 @@ public class UserController {
     /**
      * 用户登录
      *
-     * @param request
-     * @param user
+     * @param
+     * @param
      * @return
      */
     @PostMapping("/login")
-    public R<User> login(HttpServletRequest request, @RequestBody User user) {
-        //    ①. 将页面提交的密码password进行md5加密处理, 得到加密后的字符串
-        String password = user.getPassword();
-        password = DigestUtils.md5DigestAsHex(password.getBytes());
-        log.info(user.toString());
-        //②. 根据页面提交的用户名username查询数据库中员工数据信息
-        LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(User::getUsername, user.getUsername());
-        User us = userService.getOne(queryWrapper);
+    public R<User> login(HttpServletRequest request, String username, String password, String checkcode) {
 
-        //③. 如果没有查询到, 则返回登录失败结果
-        if (us == null) {
-            return R.error("登录失败捏,用户名不存在");
+        log.info("username={},password={},checkcode={}", username, password, checkcode);
+        HttpSession session = request.getSession();
+
+        //从Redis中获取缓存的验证码
+        Object codeInSession = redisTemplate.opsForValue().get("code");
+        System.out.println(codeInSession);
+        if (codeInSession != null && codeInSession.equals(checkcode)) {
+
+            //    ①. 将页面提交的密码password进行md5加密处理, 得到加密后的字符串
+            password = DigestUtils.md5DigestAsHex(password.getBytes());
+            //②. 根据页面提交的用户名username查询数据库中员工数据信息
+            LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper<>();
+            queryWrapper.eq(User::getUsername, username);
+            User us = userService.getOne(queryWrapper);
+
+            //③. 如果没有查询到, 则返回登录失败结果
+            if (us == null) {
+                return R.error("登录失败捏,用户名不存在");
+            }
+
+            //④. 密码比对，如果不一致, 则返回登录失败结果
+            if (!us.getPassword().equals(password)) {
+                return R.error("登录失败捏，密码错辣");
+            }
+
+            //⑤. 查看员工状态，如果为已禁用状态，则返回员工已禁用结果
+            if (us.getStatus() == 0) {
+                return R.error("oops,账号已被禁用");
+            }
+
+            //⑥. 登录成功，将员工id存入Session, 并返回登录成功结果
+            session.setAttribute("admin", us.getId());
+            return R.success(us);
+        } else {
+            return R.error("验证码错误，请重试");
         }
 
-        //④. 密码比对，如果不一致, 则返回登录失败结果
-        if (!us.getPassword().equals(password)) {
-            return R.error("登录失败捏，密码错辣");
-        }
-
-        //⑤. 查看员工状态，如果为已禁用状态，则返回员工已禁用结果
-        if (us.getStatus() == 0) {
-            return R.error("oops,账号已被禁用");
-        }
-
-        //⑥. 登录成功，将员工id存入Session, 并返回登录成功结果
-        request.getSession().setAttribute("admin", us.getId());
-        return R.success(us);
     }
 
     /**
@@ -130,7 +151,7 @@ public class UserController {
      * @return
      */
     @DeleteMapping
-    public R<String> deletUser(@RequestParam("ids")  List<Long> ids) {
+    public R<String> deletUser(@RequestParam("ids") List<Long> ids) {
         log.info("ids:{}", ids);
         for (Long id : ids) {
             userService.removeById(id);
@@ -178,6 +199,7 @@ public class UserController {
 
     /**
      * excel 导入
+     *
      * @param file
      * @throws Exception
      */
@@ -211,11 +233,12 @@ public class UserController {
 
     /**
      * 头像上传
+     *
      * @param file
      * @return
      */
     @PostMapping("/upload")
-    public R<String> upload(MultipartFile file){
+    public R<String> upload(MultipartFile file) {
         System.out.println(file);
         return R.success("头像上传成功");
     }
@@ -230,14 +253,15 @@ public class UserController {
     public R<User> updateWithFlavor(@RequestBody User user) {
         log.info(user.toString());
         userService.updateById(user);
-        LambdaQueryWrapper<User> queryWrapper=new LambdaQueryWrapper<>();
-        queryWrapper.eq(User::getId,user.getId());
+        LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(User::getId, user.getId());
         User one = userService.getOne(queryWrapper);
         return R.success(one);
     }
 
     /**
      * 根据id查询用户
+     *
      * @param id
      * @return
      */
@@ -250,14 +274,16 @@ public class UserController {
 
     /**
      * 更新用户
+     *
      * @param user
      * @return
      */
     @PostMapping("/update")
-    public R<User> update( @RequestBody User user) {
+    public R<User> update(@RequestBody User user) {
         log.info(user.toString());
         userService.updateById(user);
         User byId = userService.getById(user.getId());
         return R.success(byId);
     }
+
 }
